@@ -11,7 +11,7 @@ import {
 } from 'frappe-react-sdk';
 import { Stack, Text } from '@chakra-ui/react';
 import React from 'react';
-import { db } from './db';
+import { DexieDatabase } from './db';
 
 function App() {
   return (
@@ -26,42 +26,72 @@ function App() {
 
 type Props = {}
 
+type lastFetchType = {
+  _id: string;
+  name: string;
+  doctype: string;
+  lastFetchedOn: Date;
+  modified: string;
+  count: number;
+  data: any;
+}
+
+type modifiedType = {
+  modified: string;
+}
+
+
 export const FetchData = (props: Props) => {
-  // const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
-  // console.log(response);
+  const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
+  console.log(response);
 
   // const responseList = useFrappeGetDocListOffline('Indexdb', {
   //   fields: ['name', 'full_name', 'modified', 'blood_group'],
   // });
 
-  const responseCall = useFrappeGetCallOffline(
-    'frappe.client.get_value',
-    {
-      doctype: 'Indexdb',
-      filters: { name: 'aa03cf240e' },
-      fieldname: 'full_name',
-    },
-    '2023-01-19 17:27:35'
-  );
-  console.log(responseCall);
+  // const responseCall = useFrappeGetCallOffline(
+  //   'frappe.client.get_value',
+  //   {
+  //     doctype: 'Indexdb',
+  //     filters: { name: 'aa03cf240e' },
+  //     fieldname: 'full_name',
+  //   },
+  //   '2023-01-19 17:27:35'
+  // );
+  // console.log(responseCall);
 
   return (
     <>
-      {/* <Text>{JSON.stringify(response, null, 2)}</Text> */}
+      <Text>{JSON.stringify(response, null, 2)}</Text>
       {/* <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text> */}
-      <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text>
+      {/* <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text> */}
     </>
   );
 };
 
-/** Hook for fetching,storing and sync Document in IndexDB */
-const useFrappeGetDocOffline = <T,>(doctype: string, name?: string) => {
+
+/** Hook for fetching,store and sync Document in IndexDB
+ * 
+ * 
+ * @param doctype - the doctype to fetch
+ * @param name - name of the document to fetch
+ * @param databaseName [Optional] name of the database to use
+ * @param version [Optional] version of the database to use
+ * @returns object (SWRResponse) with the following properties: data, error, isValidating, and mutate
+ * 
+ * @typeParam T - The type of the document to fetch
+ */
+export const useFrappeGetDocOffline = <T,>(doctype: string, name?: string, databaseName?: string, version?: number) => {
   /** 1. check if data is in indexedDB.
    * - If lastFetched is null - we are loading data from indexedDB
    * - If lastFetched is undefined - we do not have any data in indexedDB
    * - If lastFetched is not null or undefined - we have data in indexedDB - proceed to check for latest timestamp
    */
-  const lastFetched: lastFetchType | null = useGetLastFetched(doctype, name);
+
+  //Initialise database
+  const db = DexieDatabase(databaseName, version);
+
+  const lastFetched: lastFetchType | null = useGetLastFetched(db, doctype, name);
 
   const lastFetchExist: boolean = lastFetched !== undefined && lastFetched !== null;
 
@@ -143,45 +173,29 @@ const useFrappeGetDocOffline = <T,>(doctype: string, name?: string) => {
   };
 };
 
-type lastFetchType = {
-  _id: string;
-  name: string;
-  doctype: string;
-  lastFetchedOn: Date;
-  modified: string;
-  count: number;
-  data: any;
-}
-
-// /**Custom Hook for fetch data from Indexdb for Get Doc */
-const useGetLastFetched = (doctype: string, name?: string) => {
-  const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
-
-  useEffect(() => {
-    const getLastFetched = async () => {
-      return await db.table("docs").get(`${doctype}_${name}`);
-    };
-
-    getLastFetched().then((l) => {
-      setLastFetched(l);
-      // console.log('lastFetched', lastFetched);
-    });
-  }, [doctype, name]);
-
-  return lastFetched;
-};
-
-type modifiedType = {
-  modified: string;
-}
-
-const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocListArgs) => {
+/**
+ * Hook to fetch,store and sync a list of documents in IndexDB
+ * 
+ * @param doctype Name of the doctype to fetch
+ * @param args Arguments to pass (filters, pagination, etc)
+ * @param databaseName [Optional] name of the database to use
+ * @param version [Optional] version of the database to use
+ * @returns an object (SWRResponse) with the following properties: data, error, isValidating, and mutate
+ *
+ * @typeParam T - The type definition of the document object to fetch
+ */
+export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocListArgs, databaseName?: string, version?: number) => {
   /** 1. check if data is in indexedDB.
    * - If lastFetched is null - we are loading data from indexedDB
    * - If lastFetched is undefined - we do not have any data in indexedDB
    * - If lastFetched is not null or undefined - we have data in indexedDB - proceed to check for latest count
    */
+
+  //Initialise database
+  const db = DexieDatabase(databaseName, version);
+
   const lastFetchedList: lastFetchType | null = useGetLastFetchedList(
+    db,
     doctype,
     getDocListQueryString(args)
   );
@@ -298,56 +312,19 @@ const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocListArgs) 
   };
 };
 
-// /**Custom Hook for fetch data from Indexdb for Get Doc List */
-const useGetLastFetchedList = (doctype: string, args: string) => {
-  /**  Set lastFetchedList state initially to null
-   * - Fetch data from indexedDB
-   * - Set lastFetchedList state to data from indexedDB
-   * - If lastFetchedList is null - we are loading data from indexedDB
-   * - If lastFetchedList is undefined - we do not have any data in indexedDB
-   * */
-
-  const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
-
-  useEffect(() => {
-    const getLastFetchedList = async () => {
-      return await db.table("docs").get(`${doctype}_${args}`);
-    };
-
-    getLastFetchedList().then((l) => {
-      setLastFetchedList(l);
-    });
-  }, [doctype, args]);
-
-  return lastFetchedList;
-};
-
-// /**Function for converting string date to miliseconds */
-const convertDateToMiliseconds = (dateStr: string) => {
-  const [dateComponents, timeComponents] = dateStr.split(' ');
-  // console.log(dateComponents); // 👉️ "06/26/2022"
-  // console.log(timeComponents); // 👉️ "04:35:12"
-
-  const [year, month, day] = dateComponents.split('-');
-  const [hours, minutes, seconds] = timeComponents.split(':');
-
-  const date = new Date(+year, parseInt(month) - 1, +day, +hours, +minutes, +seconds);
-  // console.log(date); // 👉️ Sun Jun 26 2022 04:35:12
-
-  const timestampInMiliseconds = Math.floor(date.getTime());
-
-  return timestampInMiliseconds;
-};
-
-// /**Function for converting date object to string */
-const formatedTimestamp = (d: Date) => {
-  const date = d.toISOString().split('T')[0];
-  const time = d.toTimeString().split(' ')[0];
-  return `${date} ${time}`;
-};
-
-// /**Custom Hook for fetch data from Indexdb for Get Doc */
-const useFrappeGetCallOffline = <T,>(method: string, params?: Record<string, any>, lastModified?: string | Date) => {
+/**
+ * Hook for fetch,store and sync data from Indexdb for Get Doc
+ * 
+ * @param method - name of the method to call (will be dotted path e.g. "frappe.client.get_list")
+ * @param params [Optional] parameters to pass to the method
+ * @param lastModified [Optional] last modified date of the data
+ * @param databaseName [Optional] name of the database
+ * @param version [Optional] version of the database
+ * @returns an object (SWRResponse) with the following properties: data (number), error, isValidating, and mutate
+ * 
+ * @typeParam T - Type of the data returned by the method
+ */
+export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<string, any>, lastModified?: string | Date, databaseName?: string, version?: number) => {
   /** 1. Check if data is in indexedDB
    * - If lastFetchData is null - we are loading data from indexedDB
    * - If lastFetchData is undefined - we do not have any data in indexedDB
@@ -355,7 +332,10 @@ const useFrappeGetCallOffline = <T,>(method: string, params?: Record<string, any
    * - Fetch data from indexedDB
    */
 
-  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(method, params);
+  //Intialize database
+  const db = DexieDatabase(databaseName, version);
+
+  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(db, method, params);
 
   // Check if data is in indexedDB
   const lastFetchExist: boolean =
@@ -429,8 +409,50 @@ const useFrappeGetCallOffline = <T,>(method: string, params?: Record<string, any
   };
 };
 
+/**Custom Hook for fetch data from Indexdb for Get Doc */
+export const useGetLastFetched = (db: any, doctype: string, name?: string) => {
+  const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
+
+  useEffect(() => {
+    const getLastFetched = async () => {
+      return await db.table("docs").get(`${doctype}_${name}`);
+    };
+
+    getLastFetched().then((l) => {
+      setLastFetched(l);
+      // console.log('lastFetched', lastFetched);
+    });
+  }, [doctype, name]);
+
+  return lastFetched;
+};
+
+// /**Custom Hook for fetch data from Indexdb for Get Doc List */
+export const useGetLastFetchedList = (db: any, doctype: string, args: string) => {
+  /**  Set lastFetchedList state initially to null
+   * - Fetch data from indexedDB
+   * - Set lastFetchedList state to data from indexedDB
+   * - If lastFetchedList is null - we are loading data from indexedDB
+   * - If lastFetchedList is undefined - we do not have any data in indexedDB
+   * */
+
+  const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
+
+  useEffect(() => {
+    const getLastFetchedList = async () => {
+      return await db.table("docs").get(`${doctype}_${args}`);
+    };
+
+    getLastFetchedList().then((l) => {
+      setLastFetchedList(l);
+    });
+  }, [doctype, args]);
+
+  return lastFetchedList;
+};
+
 // /**Custom Hook for fetch data from Indexdb for Get Call */
-const useGetLastFetchedData = (method: string, params?: Record<string, any>) => {
+export const useGetLastFetchedData = (db: any, method: string, params?: Record<string, any>) => {
   /**  Set lastFetchedData state initially to null
    * - Fetch data from indexedDB
    * - Set lastFetchedData state to data from indexedDB
@@ -454,7 +476,7 @@ const useGetLastFetchedData = (method: string, params?: Record<string, any>) => 
 };
 
 // /**Function for converting string or object date to miliseconds */
-const convertDateToMilisecondsForGetCall = (date: string | Date) => {
+export const convertDateToMilisecondsForGetCall = (date: string | Date) => {
   if (typeof date === 'string') {
     return convertDateToMiliseconds(date);
   } else if (typeof date === 'object') {
@@ -463,12 +485,36 @@ const convertDateToMilisecondsForGetCall = (date: string | Date) => {
 };
 
 // /**Function for check type of date and return date in string format */
-const checkTypeOfDate = (date: string | Date) => {
+export const checkTypeOfDate = (date: string | Date) => {
   if (typeof date === 'string') {
     return date;
   } else if (typeof date === 'object') {
     return formatedTimestamp(date);
   }
+};
+
+// /**Function for converting string date to miliseconds */
+export const convertDateToMiliseconds = (dateStr: string) => {
+  const [dateComponents, timeComponents] = dateStr.split(' ');
+  // console.log(dateComponents); // 👉️ "06/26/2022"
+  // console.log(timeComponents); // 👉️ "04:35:12"
+
+  const [year, month, day] = dateComponents.split('-');
+  const [hours, minutes, seconds] = timeComponents.split(':');
+
+  const date = new Date(+year, parseInt(month) - 1, +day, +hours, +minutes, +seconds);
+  // console.log(date); // 👉️ Sun Jun 26 2022 04:35:12
+
+  const timestampInMiliseconds = Math.floor(date.getTime());
+
+  return timestampInMiliseconds;
+};
+
+// /**Function for converting date object to string */
+export const formatedTimestamp = (d: Date) => {
+  const date = d.toISOString().split('T')[0];
+  const time = d.toTimeString().split(' ')[0];
+  return `${date} ${time}`;
 };
 
 export default App;
