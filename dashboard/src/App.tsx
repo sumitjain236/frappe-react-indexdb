@@ -10,7 +10,7 @@ import {
 } from 'frappe-react-sdk';
 import { Stack, Text } from '@chakra-ui/react';
 import React from 'react';
-import { DexieDatabase } from './db';
+import { DexieDatabase, lastFetchType, modifiedType } from './db';
 
 function App() {
   return (
@@ -25,19 +25,19 @@ function App() {
 
 type Props = {}
 
-type lastFetchType = {
-  _id: string;
-  name: string;
-  doctype: string;
-  lastFetchedOn: Date;
-  modified: string;
-  count: number;
-  data: any;
-}
+// type lastFetchType = {
+//   _id: string;
+//   name: string;
+//   doctype: string;
+//   lastFetchedOn: Date;
+//   modified: string;
+//   count: number;
+//   data: any;
+// }
 
-type modifiedType = {
-  modified: string;
-}
+// type modifiedType = {
+//   modified: string;
+// }
 
 
 export const FetchData = (props: Props) => {
@@ -48,22 +48,22 @@ export const FetchData = (props: Props) => {
   //   fields: ['name', 'full_name', 'modified', 'blood_group'],
   // });
 
-  // const responseCall = useFrappeGetCallOffline(
-  //   'frappe.client.get_value',
-  //   {
-  //     doctype: 'Indexdb',
-  //     filters: { name: 'aa03cf240e' },
-  //     fieldname: 'full_name',
-  //   },
-  //   '2023-01-19 17:27:35'
-  // );
-  // console.log(responseCall);
+  const responseCall = useFrappeGetCallOffline(
+    'frappe.client.get_value',
+    {
+      doctype: 'Indexdb',
+      filters: { name: 'aa03cf240e' },
+      fieldname: 'full_name',
+    },
+    '2023-01-19 17:27:35'
+  );
+  console.log(responseCall);
 
   return (
     <>
-      <Text>{JSON.stringify(response, null, 2)}</Text>
+      {/* <Text>{JSON.stringify(response, null, 2)}</Text> */}
       {/* <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text> */}
-      {/* <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text> */}
+      <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text>
     </>
   );
 };
@@ -334,7 +334,9 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
   //Intialize database
   const db = DexieDatabase(databaseName, version);
 
-  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(db, method, params);
+  const encodeparams = encodeQueryData(params ?? {});
+
+  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(db, method, encodeQueryData(params ?? {}));
 
   // Check if data is in indexedDB
   const lastFetchExist: boolean =
@@ -373,8 +375,8 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
   useEffect(() => {
     if (data) {
       db.table("docs").put({
-        _id: `${method}_${params}`,
-        name: `${method}_${params}`,
+        _id: `${method}_${encodeQueryData(params ?? {})}`,
+        name: `${method}_${encodeQueryData(params ?? {})}`,
         doctype: method,
         lastFetchedOn: new Date(),
         modified: lastModified
@@ -451,7 +453,7 @@ export const useGetLastFetchedList = (db: any, doctype: string, args: string) =>
 };
 
 // /**Custom Hook for fetch data from Indexdb for Get Call */
-export const useGetLastFetchedData = (db: any, method: string, params?: Record<string, any>) => {
+export const useGetLastFetchedData = (db: any, method: string, params?: string) => {
   /**  Set lastFetchedData state initially to null
    * - Fetch data from indexedDB
    * - Set lastFetchedData state to data from indexedDB
@@ -515,5 +517,12 @@ export const formatedTimestamp = (d: Date) => {
   const time = d.toTimeString().split(' ')[0];
   return `${date} ${time}`;
 };
+
+function encodeQueryData(data: Record<string, any>) {
+  const ret = [];
+  for (let d in data)
+    ret.push(encodeURIComponent(d) + '=' + encodeURIComponent(data[d]));
+  return ret.join('&');
+}
 
 export default App;

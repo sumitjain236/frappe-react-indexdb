@@ -21,3 +21,16 @@ export const DexieDatabase = (databaseName: string = 'frappe-react-indexdb', ver
   });
   return db;
 }
+
+export interface lastFetchType {
+  _id: string;
+  name: string;
+  doctype: string;
+  lastFetchedOn: Date;
+  modified: string;
+  count: number;
+  data: any;
+}
+export interface modifiedType {
+  modified: string;
+}
