@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import './App.css';
 import {
   FrappeProvider,
+  GetDocListArgs,
   getDocListQueryString,
   useFrappeGetCall,
   useFrappeGetDoc,
@@ -14,7 +15,7 @@ import { db } from './db';
 
 function App() {
   return (
-    <FrappeProvider>
+    <FrappeProvider >
       <Stack>
         <Text>Hii</Text>
         <FetchData />
@@ -23,8 +24,10 @@ function App() {
   );
 }
 
-export const FetchData = () => {
-  // const response = useFrappeGetDocOffline('Indexdb', '34be64e834');
+type Props = {}
+
+export const FetchData = (props: Props) => {
+  // const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
   // console.log(response);
 
   // const responseList = useFrappeGetDocListOffline('Indexdb', {
@@ -52,22 +55,22 @@ export const FetchData = () => {
 };
 
 /** Hook for fetching,storing and sync Document in IndexDB */
-const useFrappeGetDocOffline = (doctype, name) => {
+const useFrappeGetDocOffline = <T,>(doctype: string, name?: string) => {
   /** 1. check if data is in indexedDB.
    * - If lastFetched is null - we are loading data from indexedDB
    * - If lastFetched is undefined - we do not have any data in indexedDB
    * - If lastFetched is not null or undefined - we have data in indexedDB - proceed to check for latest timestamp
    */
-  const lastFetched = useGetLastFetched(doctype, name);
+  const lastFetched: lastFetchType | null = useGetLastFetched(doctype, name);
 
-  const lastFetchExist = lastFetched !== undefined && lastFetched !== null;
+  const lastFetchExist: boolean = lastFetched !== undefined && lastFetched !== null;
 
   /**
    * 2. Fetch timestamp from frappe for document
    * - If lastFetched is null or undefined - then we do not fetch timestamp from frappe
    * - However, if lastFetched has data - we fetch timestamp from frappe for comparison
    */
-  const { data: modified } = useFrappeGetCall(
+  const { data: modified } = useFrappeGetCall<{ message: { modified: string } }>(
     'frappe.client.get_value',
     {
       doctype,
@@ -77,7 +80,7 @@ const useFrappeGetDocOffline = (doctype, name) => {
     lastFetchExist ? undefined : null
   );
 
-  const [shouldLoad, setShouldLoad] = useState(false);
+  const [shouldLoad, setShouldLoad] = useState<boolean>(false);
 
   useEffect(() => {
     if (lastFetched === undefined) {
@@ -87,7 +90,7 @@ const useFrappeGetDocOffline = (doctype, name) => {
       lastFetchExist &&
       modified &&
       modified.message.modified &&
-      modified.message.modified !== lastFetched.modified
+      modified.message.modified !== lastFetched?.modified
     ) {
       setShouldLoad(true);
     } else if (
@@ -99,7 +102,7 @@ const useFrappeGetDocOffline = (doctype, name) => {
     }
   }, [lastFetched, modified]);
 
-  const { data, error, mutate, isLoading, isValidating } = useFrappeGetDoc(
+  const { data, error, mutate, isLoading, isValidating } = useFrappeGetDoc<T>(
     doctype,
     name,
     shouldLoad ? undefined : null
@@ -108,7 +111,7 @@ const useFrappeGetDocOffline = (doctype, name) => {
   /** Store in indexedDB if data is fetched from server */
   useEffect(() => {
     if (data) {
-      db.docs.put({
+      db.table("docs").put({
         _id: `${doctype}_${name}`,
         lastFetchedOn: new Date(),
         modified: data.modified,
@@ -118,7 +121,7 @@ const useFrappeGetDocOffline = (doctype, name) => {
         count: 1,
       });
     } else if (error && lastFetchExist) {
-      db.docs.delete(`${doctype}_${name}`);
+      db.table("docs").delete(`${doctype}_${name}`);
     }
   }, [data]);
 
@@ -140,13 +143,23 @@ const useFrappeGetDocOffline = (doctype, name) => {
   };
 };
 
-/**Custom Hook for fetch data from Indexdb for Get Doc */
-const useGetLastFetched = (doctype, name) => {
-  const [lastFetched, setLastFetched] = useState(null);
+type lastFetchType = {
+  _id: string;
+  name: string;
+  doctype: string;
+  lastFetchedOn: Date;
+  modified: string;
+  count: number;
+  data: any;
+}
+
+// /**Custom Hook for fetch data from Indexdb for Get Doc */
+const useGetLastFetched = (doctype: string, name?: string) => {
+  const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
 
   useEffect(() => {
     const getLastFetched = async () => {
-      return await db.docs.get(`${doctype}_${name}`);
+      return await db.table("docs").get(`${doctype}_${name}`);
     };
 
     getLastFetched().then((l) => {
@@ -158,13 +171,17 @@ const useGetLastFetched = (doctype, name) => {
   return lastFetched;
 };
 
-const useFrappeGetDocListOffline = (doctype, args) => {
+type modifiedType = {
+  modified: string;
+}
+
+const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocListArgs) => {
   /** 1. check if data is in indexedDB.
    * - If lastFetched is null - we are loading data from indexedDB
    * - If lastFetched is undefined - we do not have any data in indexedDB
    * - If lastFetched is not null or undefined - we have data in indexedDB - proceed to check for latest count
    */
-  const lastFetchedList = useGetLastFetchedList(
+  const lastFetchedList: lastFetchType | null = useGetLastFetchedList(
     doctype,
     getDocListQueryString(args)
   );
@@ -177,7 +194,7 @@ const useFrappeGetDocListOffline = (doctype, args) => {
 
   const { data: listCount } = useFrappeGetDocCount(doctype, args?.filters);
 
-  const countNotChanged =
+  const countNotChanged: boolean =
     lastFetchExist &&
     listCount !== undefined &&
     listCount === lastFetchedList.count;
@@ -186,10 +203,10 @@ const useFrappeGetDocListOffline = (doctype, args) => {
    *     not equal to lastFetchedList.count
    */
 
-  const { data: modified } = useFrappeGetDocList(
+  const { data: modified } = useFrappeGetDocList<modifiedType>(
     doctype,
     {
-      filters: args.filters,
+      filters: args?.filters,
       fields: ['modified'],
       limit: 1,
       orderBy: {
@@ -200,7 +217,9 @@ const useFrappeGetDocListOffline = (doctype, args) => {
     countNotChanged ? undefined : null
   );
 
-  const modifiedChanged = modified && modified[0] && modified[0].modified;
+  const modifiedChanged: boolean = modified !== undefined && modified[0] !== undefined && modified[0].modified !== undefined;
+
+  console.log('modifiedChanged', modifiedChanged);
 
   /** 4. Set shouldLoad state to true
    * - If lastFetchedList is undefined - we do not have any data in indexedDB
@@ -226,7 +245,7 @@ const useFrappeGetDocListOffline = (doctype, args) => {
         modified &&
         modified[0] &&
         convertDateToMiliseconds(modified[0].modified) >
-          Math.floor(lastFetchedList.lastFetchedOn.getTime())
+        Math.floor(lastFetchedList.lastFetchedOn.getTime())
       ) {
         console.log('Modified changed');
         setShouldLoad(true);
@@ -236,7 +255,7 @@ const useFrappeGetDocListOffline = (doctype, args) => {
 
   /** 5. Fetch data from frappe if shouldLoad is true
    */
-  const { data, error, mutate, isLoading, isValidating } = useFrappeGetDocList(
+  const { data, error, mutate, isLoading, isValidating } = useFrappeGetDocList<T>(
     doctype,
     args,
     shouldLoad ? undefined : null
@@ -247,19 +266,17 @@ const useFrappeGetDocListOffline = (doctype, args) => {
   useEffect(() => {
     if (data) {
       console.log('Runs');
-      db.docs.put({
+      db.table("docs").put({
         _id: `${doctype}_${getDocListQueryString(args)}`,
         name: `${doctype}_${getDocListQueryString(args)}`,
         doctype: doctype,
         lastFetchedOn: new Date(),
-        modified: modifiedChanged
-          ? modified[0].modified
-          : formatedTimestamp(new Date()),
+        modified: modified && modified[0] && modified[0].modified ? modified[0].modified : formatedTimestamp(new Date()),
         count: listCount,
         data: { ...data },
       });
     } else if (error && lastFetchExist) {
-      db.docs.delete(`${doctype}_${getDocListQueryString(args)}`);
+      db.table("docs").delete(`${doctype}_${getDocListQueryString(args)}`);
     }
   }, [data]);
 
@@ -281,8 +298,8 @@ const useFrappeGetDocListOffline = (doctype, args) => {
   };
 };
 
-/**Custom Hook for fetch data from Indexdb for Get Doc List */
-const useGetLastFetchedList = (doctype, args) => {
+// /**Custom Hook for fetch data from Indexdb for Get Doc List */
+const useGetLastFetchedList = (doctype: string, args: string) => {
   /**  Set lastFetchedList state initially to null
    * - Fetch data from indexedDB
    * - Set lastFetchedList state to data from indexedDB
@@ -290,11 +307,11 @@ const useGetLastFetchedList = (doctype, args) => {
    * - If lastFetchedList is undefined - we do not have any data in indexedDB
    * */
 
-  const [lastFetchedList, setLastFetchedList] = useState(null);
+  const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
 
   useEffect(() => {
     const getLastFetchedList = async () => {
-      return await db.docs.get(`${doctype}_${args}`);
+      return await db.table("docs").get(`${doctype}_${args}`);
     };
 
     getLastFetchedList().then((l) => {
@@ -305,8 +322,8 @@ const useGetLastFetchedList = (doctype, args) => {
   return lastFetchedList;
 };
 
-/**Function for converting string date to miliseconds */
-const convertDateToMiliseconds = (dateStr) => {
+// /**Function for converting string date to miliseconds */
+const convertDateToMiliseconds = (dateStr: string) => {
   const [dateComponents, timeComponents] = dateStr.split(' ');
   // console.log(dateComponents); // 👉️ "06/26/2022"
   // console.log(timeComponents); // 👉️ "04:35:12"
@@ -314,7 +331,7 @@ const convertDateToMiliseconds = (dateStr) => {
   const [year, month, day] = dateComponents.split('-');
   const [hours, minutes, seconds] = timeComponents.split(':');
 
-  const date = new Date(+year, month - 1, +day, +hours, +minutes, +seconds);
+  const date = new Date(+year, parseInt(month) - 1, +day, +hours, +minutes, +seconds);
   // console.log(date); // 👉️ Sun Jun 26 2022 04:35:12
 
   const timestampInMiliseconds = Math.floor(date.getTime());
@@ -322,15 +339,15 @@ const convertDateToMiliseconds = (dateStr) => {
   return timestampInMiliseconds;
 };
 
-/**Function for converting date object to string */
-const formatedTimestamp = (d) => {
+// /**Function for converting date object to string */
+const formatedTimestamp = (d: Date) => {
   const date = d.toISOString().split('T')[0];
   const time = d.toTimeString().split(' ')[0];
   return `${date} ${time}`;
 };
 
-/**Custom Hook for fetch data from Indexdb for Get Doc */
-const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
+// /**Custom Hook for fetch data from Indexdb for Get Doc */
+const useFrappeGetCallOffline = <T,>(method: string, params?: Record<string, any>, lastModified?: string | Date) => {
   /** 1. Check if data is in indexedDB
    * - If lastFetchData is null - we are loading data from indexedDB
    * - If lastFetchData is undefined - we do not have any data in indexedDB
@@ -338,10 +355,10 @@ const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
    * - Fetch data from indexedDB
    */
 
-  const lastFetchedData = useGetLastFetchedData(method, params);
+  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(method, params);
 
   // Check if data is in indexedDB
-  const lastFetchExist =
+  const lastFetchExist: boolean =
     lastFetchedData !== undefined && lastFetchedData !== null;
 
   /** 2. If data is in indexedDB - check if data is modified
@@ -356,8 +373,8 @@ const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
     } else if (
       lastFetchExist &&
       lastModified &&
-      convertDateToMilisecondsForGetCall(lastModified) >
-        Math.floor(lastFetchedData.lastFetchedOn.getTime())
+      convertDateToMilisecondsForGetCall(lastModified)! >
+      Math.floor(lastFetchedData!.lastFetchedOn.getTime())
     ) {
       setShouldLoad(true);
     }
@@ -376,7 +393,7 @@ const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
 
   useEffect(() => {
     if (data) {
-      db.docs.put({
+      db.table("docs").put({
         _id: `${method}_${params}`,
         name: `${method}_${params}`,
         doctype: method,
@@ -388,7 +405,7 @@ const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
         data: { ...data },
       });
     } else if (error && lastFetchExist) {
-      db.docs.delete(`${method}_${params}`);
+      db.table("docs").delete(`${method}_${params}`);
     }
   }, [data]);
 
@@ -412,8 +429,8 @@ const useFrappeGetCallOffline = (method, params = {}, lastModified = null) => {
   };
 };
 
-/**Custom Hook for fetch data from Indexdb for Get Call */
-const useGetLastFetchedData = (method, params) => {
+// /**Custom Hook for fetch data from Indexdb for Get Call */
+const useGetLastFetchedData = (method: string, params?: Record<string, any>) => {
   /**  Set lastFetchedData state initially to null
    * - Fetch data from indexedDB
    * - Set lastFetchedData state to data from indexedDB
@@ -421,11 +438,11 @@ const useGetLastFetchedData = (method, params) => {
    * - If lastFetchedData is undefined - we do not have any data in indexedDB
    * */
 
-  const [lastFetchedData, setLastFetchedData] = useState(null);
+  const [lastFetchedData, setLastFetchedData] = useState<lastFetchType | null>(null);
 
   useEffect(() => {
     const getLastFetchedData = async () => {
-      return await db.docs.get(`${method}_${params}`);
+      return await db.table("docs").get(`${method}_${params}`);
     };
 
     getLastFetchedData().then((l) => {
@@ -436,8 +453,8 @@ const useGetLastFetchedData = (method, params) => {
   return lastFetchedData;
 };
 
-/**Function for converting string or object date to miliseconds */
-const convertDateToMilisecondsForGetCall = (date) => {
+// /**Function for converting string or object date to miliseconds */
+const convertDateToMilisecondsForGetCall = (date: string | Date) => {
   if (typeof date === 'string') {
     return convertDateToMiliseconds(date);
   } else if (typeof date === 'object') {
@@ -445,8 +462,8 @@ const convertDateToMilisecondsForGetCall = (date) => {
   }
 };
 
-/**Function for check type of date and return date in string format */
-const checkTypeOfDate = (date) => {
+// /**Function for check type of date and return date in string format */
+const checkTypeOfDate = (date: string | Date) => {
   if (typeof date === 'string') {
     return date;
   } else if (typeof date === 'object') {
