@@ -34,22 +34,22 @@ export const FetchData = (props: Props) => {
   //   fields: ['name', 'full_name', 'modified', 'blood_group'],
   // });
 
-  const responseCall = useFrappeGetCallOffline(
-    'frappe.client.get_value',
-    {
-      doctype: 'Indexdb',
-      filters: { name: 'aa03cf240e' },
-      fieldname: 'full_name',
-    },
-    '2023-01-19 17:27:35'
-  );
-  console.log(responseCall);
+  // const responseCall = useFrappeGetCallOffline(
+  //   'frappe.client.get_value',
+  //   {
+  //     doctype: 'Indexdb',
+  //     filters: { name: 'aa03cf240e' },
+  //     fieldname: 'full_name',
+  //   },
+  //   '2023-01-19 17:27:35'
+  // );
+  // console.log(responseCall);
 
   return (
     <>
       {/* <Text>{JSON.stringify(response, null, 2)}</Text> */}
       {/* <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text> */}
-      <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text>
+      {/* <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text> */}
     </>
   );
 };
