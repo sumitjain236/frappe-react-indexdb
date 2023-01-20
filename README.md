@@ -1,6 +1,6 @@
 ## Library Management
 
-Library Management System
+Frappe React IndexDB
 
 #### License
 
