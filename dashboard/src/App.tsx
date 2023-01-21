@@ -405,19 +405,19 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
 };
 
 /**Custom Hook for fetch data from Indexdb for Get Doc */
-export const useGetLastFetched = (db: any, doctype: string, name?: string) => {
+export const useGetLastFetched = (db: any, doctype_or_method: string, name_or_args?: string) => {
   const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
 
   useEffect(() => {
     const getLastFetched = async () => {
-      return await db.table("docs").get(`${doctype}_${name}`);
+      return await db.table("docs").get(`${doctype_or_method}_${name_or_args}`);
     };
 
     getLastFetched().then((l) => {
       setLastFetched(l);
       // console.log('lastFetched', lastFetched);
     });
-  }, [doctype, name]);
+  }, [doctype_or_method, name_or_args]);
 
   return lastFetched;
 };
