@@ -193,11 +193,7 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
   //Initialise database
   const db = DexieDatabase(databaseName, version);
 
-  const lastFetchedList: lastFetchType | null = useGetLastFetchedList(
-    db,
-    doctype,
-    getDocListQueryString(args)
-  );
+  const lastFetchedList: lastFetchType | null = useGetLastFetched(db, doctype, getDocListQueryString(args));
 
   const lastFetchExist =
     lastFetchedList !== undefined && lastFetchedList !== null;
@@ -334,9 +330,7 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
   //Intialize database
   const db = DexieDatabase(databaseName, version);
 
-  const encodeparams = encodeQueryData(params ?? {});
-
-  const lastFetchedData: lastFetchType | null = useGetLastFetchedData(db, method, encodeQueryData(params ?? {}));
+  const lastFetchedData: lastFetchType | null = useGetLastFetched(db, method, encodeQueryData(params ?? {}));
 
   // Check if data is in indexedDB
   const lastFetchExist: boolean =
@@ -428,53 +422,53 @@ export const useGetLastFetched = (db: any, doctype: string, name?: string) => {
   return lastFetched;
 };
 
-// /**Custom Hook for fetch data from Indexdb for Get Doc List */
-export const useGetLastFetchedList = (db: any, doctype: string, args: string) => {
-  /**  Set lastFetchedList state initially to null
-   * - Fetch data from indexedDB
-   * - Set lastFetchedList state to data from indexedDB
-   * - If lastFetchedList is null - we are loading data from indexedDB
-   * - If lastFetchedList is undefined - we do not have any data in indexedDB
-   * */
+// // /**Custom Hook for fetch data from Indexdb for Get Doc List */
+// export const useGetLastFetchedList = (db: any, doctype: string, args: string) => {
+//   /**  Set lastFetchedList state initially to null
+//    * - Fetch data from indexedDB
+//    * - Set lastFetchedList state to data from indexedDB
+//    * - If lastFetchedList is null - we are loading data from indexedDB
+//    * - If lastFetchedList is undefined - we do not have any data in indexedDB
+//    * */
 
-  const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
+//   const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
 
-  useEffect(() => {
-    const getLastFetchedList = async () => {
-      return await db.table("docs").get(`${doctype}_${args}`);
-    };
+//   useEffect(() => {
+//     const getLastFetchedList = async () => {
+//       return await db.table("docs").get(`${doctype}_${args}`);
+//     };
 
-    getLastFetchedList().then((l) => {
-      setLastFetchedList(l);
-    });
-  }, [doctype, args]);
+//     getLastFetchedList().then((l) => {
+//       setLastFetchedList(l);
+//     });
+//   }, [doctype, args]);
 
-  return lastFetchedList;
-};
+//   return lastFetchedList;
+// };
 
-// /**Custom Hook for fetch data from Indexdb for Get Call */
-export const useGetLastFetchedData = (db: any, method: string, params?: string) => {
-  /**  Set lastFetchedData state initially to null
-   * - Fetch data from indexedDB
-   * - Set lastFetchedData state to data from indexedDB
-   * - If lastFetchedData is null - we are loading data from indexedDB
-   * - If lastFetchedData is undefined - we do not have any data in indexedDB
-   * */
+// // /**Custom Hook for fetch data from Indexdb for Get Call */
+// export const useGetLastFetchedData = (db: any, method: string, params?: string) => {
+//   /**  Set lastFetchedData state initially to null
+//    * - Fetch data from indexedDB
+//    * - Set lastFetchedData state to data from indexedDB
+//    * - If lastFetchedData is null - we are loading data from indexedDB
+//    * - If lastFetchedData is undefined - we do not have any data in indexedDB
+//    * */
 
-  const [lastFetchedData, setLastFetchedData] = useState<lastFetchType | null>(null);
+//   const [lastFetchedData, setLastFetchedData] = useState<lastFetchType | null>(null);
 
-  useEffect(() => {
-    const getLastFetchedData = async () => {
-      return await db.table("docs").get(`${method}_${params}`);
-    };
+//   useEffect(() => {
+//     const getLastFetchedData = async () => {
+//       return await db.table("docs").get(`${method}_${params}`);
+//     };
 
-    getLastFetchedData().then((l) => {
-      setLastFetchedData(l);
-    });
-  }, [method, params]);
+//     getLastFetchedData().then((l) => {
+//       setLastFetchedData(l);
+//     });
+//   }, [method, params]);
 
-  return lastFetchedData;
-};
+//   return lastFetchedData;
+// };
 
 // /**Function for converting string or object date to miliseconds */
 export const convertDateToMilisecondsForGetCall = (date: string | Date) => {
