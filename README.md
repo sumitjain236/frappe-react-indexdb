@@ -1,6 +1,6 @@
 ## IndexDB
 
-##Frappe-React-IndexDB
+## Frappe-React-IndexDB
 
 This package is a wrapper around [Frappe-React] and [IndexedDB] to provide a simple way to cache data from Frappe in the browser. The default database name is `frappe-react-indexdb` and the default version is `1`. The package also provides a way to sync data from Frappe to IndexDB.
 
