@@ -10,7 +10,8 @@ import {
 } from 'frappe-react-sdk';
 import { Stack, Text } from '@chakra-ui/react';
 import React from 'react';
-import { DexieDatabase, lastFetchType, modifiedType } from './db';
+import { CustomError, DexieDatabase, lastFetchType, modifiedType } from './db';
+import Dexie from 'dexie';
 
 function App() {
   return (
@@ -25,45 +26,33 @@ function App() {
 
 type Props = {}
 
-// type lastFetchType = {
-//   _id: string;
-//   name: string;
-//   doctype: string;
-//   lastFetchedOn: Date;
-//   modified: string;
-//   count: number;
-//   data: any;
-// }
-
-// type modifiedType = {
-//   modified: string;
-// }
-
-
 export const FetchData = (props: Props) => {
-  // const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
+  const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
   // console.log(response);
 
   const responseList = useFrappeGetDocListOffline('Indexdb', {
     fields: ['name', 'full_name', 'modified', 'blood_group'],
   });
 
-  // const responseCall = useFrappeGetCallOffline(
-  //   'frappe.client.get_value',
-  //   {
-  //     doctype: 'Indexdb',
-  //     filters: { name: 'aa03cf240e' },
-  //     fieldname: 'full_name',
-  //   },
-  //   '2023-01-19 17:27:35'
-  // );
+  const responseCall = useFrappeGetCallOffline(
+    'frappe.client.get_value',
+    {
+      doctype: 'Indexdb',
+      filters: { name: 'aa03cf240e' },
+      fieldname: 'full_name',
+    },
+    '2023-01-19 17:27:35'
+  );
   // console.log(responseCall);
+
+  const dbName = getDatabaseName();
 
   return (
     <>
-      {/* <Text>Doc Data: {JSON.stringify(response, null, 2)}</Text> */}
+      <Text>Doc Data: {JSON.stringify(response, null, 2)}</Text>
       <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text>
-      {/* <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text> */}
+      <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text>
+      <Text>Database Name: {JSON.stringify(dbName, null, 2)}</Text>
     </>
   );
 };
@@ -90,7 +79,7 @@ export const useFrappeGetDocOffline = <T,>(doctype: string, name?: string, datab
   //Initialise database
   const db = DexieDatabase(databaseName, version);
 
-  const lastFetched: lastFetchType | null = useGetLastFetched(db, doctype, name);
+  const lastFetched: lastFetchType | null = useGetLastFetched(db, 'docs', doctype, name);
 
   const lastFetchExist: boolean = lastFetched !== undefined && lastFetched !== null;
 
@@ -161,12 +150,10 @@ export const useFrappeGetDocOffline = <T,>(doctype: string, name?: string, datab
     if (data) {
       db.table("docs").put({
         _id: `${doctype}_${name}`,
-        lastFetchedOn: new Date(),
         modified: data.modified,
         name: name,
         doctype: doctype,
         data: { ...data },
-        count: 1,
       });
     } else if (error && lastFetchExist) {
       db.table("docs").delete(`${doctype}_${name}`);
@@ -191,7 +178,7 @@ export const useFrappeGetDocOffline = <T,>(doctype: string, name?: string, datab
   return {
     isLoadedFromServer: shouldLoad,
     data: shouldLoad ? data : lastFetched ? lastFetched.data : undefined,
-    error: hasPermission ? error : "You do not have permission to view this document",
+    error: hasPermission ? error : new CustomError(403, "FORBIDDEN", "there was an error", `frappe.exceptions.PermissionError: No permission for ${doctype}`),
     mutate: forceRefresh,
     delete: forceDelete,
     isLoading: shouldLoad ? isLoading : lastFetched === undefined,
@@ -220,7 +207,7 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
   //Initialise database
   const db = DexieDatabase(databaseName, version);
 
-  const lastFetchedList: lastFetchType | null = useGetLastFetched(db, doctype, getDocListQueryString(args));
+  const lastFetchedList: lastFetchType | null = useGetLastFetched(db, 'docLists', doctype, getDocListQueryString(args));
 
   const lastFetchExist: boolean =
     lastFetchedList !== undefined && lastFetchedList !== null;
@@ -277,7 +264,7 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
   useEffect(() => {
     if (!hasPermission) {
       if (lastFetchExist) {
-        db.table("docs").delete(`${doctype}_${getDocListQueryString(args)}`);
+        db.table("docLists").delete(`${doctype}_${getDocListQueryString(args)}`);
       }
     }
     else {
@@ -293,9 +280,9 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
           modified &&
           modified[0] &&
           convertDateToMiliseconds(modified[0].modified) >
-          Math.floor(lastFetchedList.lastFetchedOn.getTime())
+          Math.floor(lastFetchedList!.lastFetchedOn!.getTime())
         ) {
-          console.log('Modified changed');
+          // console.log('Modified changed');
           setShouldLoad(true);
         }
       }
@@ -314,17 +301,16 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
 
   useEffect(() => {
     if (data) {
-      db.table("docs").put({
+      db.table("docLists").put({
         _id: `${doctype}_${getDocListQueryString(args)}`,
         name: `${doctype}_${getDocListQueryString(args)}`,
         doctype: doctype,
         lastFetchedOn: new Date(),
-        modified: modified && modified[0] && modified[0].modified ? modified[0].modified : formatedTimestamp(new Date()),
         count: listCount,
         data: { ...data },
       });
     } else if (error && lastFetchExist) {
-      db.table("docs").delete(`${doctype}_${getDocListQueryString(args)}`);
+      db.table("docLists").delete(`${doctype}_${getDocListQueryString(args)}`);
     }
   }, [data]);
 
@@ -347,7 +333,7 @@ export const useFrappeGetDocListOffline = <T,>(doctype: string, args?: GetDocLis
   return {
     isLoadedFromServer: shouldLoad,
     data: shouldLoad ? data : lastFetchedList?.data,
-    error: hasPermission ? error : "You do not have permission to view this document",
+    error: hasPermission ? error : new CustomError(403, "FORBIDDEN", "there was an error", `frappe.exceptions.PermissionError: No permission for ${doctype}`),
     mutate: forceRefresh,
     delete: forceDelete,
     isLoading: shouldLoad ? isLoading : lastFetchedList === undefined,
@@ -378,7 +364,7 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
   //Intialize database
   const db = DexieDatabase(databaseName, version);
 
-  const lastFetchedData: lastFetchType | null = useGetLastFetched(db, method, encodeQueryData(params ?? {}));
+  const lastFetchedData: lastFetchType | null = useGetLastFetched(db, 'docCalls', method, encodeQueryData(params ?? {}));
 
   // Check if data is in indexedDB
   const lastFetchExist: boolean =
@@ -397,7 +383,7 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
       lastFetchExist &&
       lastModified &&
       convertDateToMilisecondsForGetCall(lastModified)! >
-      Math.floor(lastFetchedData!.lastFetchedOn.getTime())
+      Math.floor(lastFetchedData!.lastFetchedOn!.getTime())
     ) {
       setShouldLoad(true);
     }
@@ -416,15 +402,11 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
 
   useEffect(() => {
     if (data) {
-      db.table("docs").put({
+      db.table("docCalls").put({
         _id: `${method}_${encodeQueryData(params ?? {})}`,
         name: `${method}_${encodeQueryData(params ?? {})}`,
         doctype: method,
         lastFetchedOn: new Date(),
-        modified: lastModified
-          ? checkTypeOfDate(lastModified)
-          : formatedTimestamp(new Date()),
-        count: 1,
         data: { ...data },
       });
     } else if (error && lastFetchExist) {
@@ -443,7 +425,7 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
   const forceDelete = () => {
     setShouldLoad(false);
     if (lastFetchExist) {
-      db.table("docs").delete(`${method}_${params}`);
+      db.table("docCalls").delete(`${method}_${params}`);
     }
   }
 
@@ -461,12 +443,12 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
 };
 
 /**Custom Hook for fetch data from Indexdb for Get Doc */
-export const useGetLastFetched = (db: any, doctype_or_method: string, name_or_args?: string) => {
+export const useGetLastFetched = (db: any, table: string, doctype_or_method: string, name_or_args?: string) => {
   const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
 
   useEffect(() => {
     const getLastFetched = async () => {
-      return await db.table("docs").get(`${doctype_or_method}_${name_or_args}`);
+      return await db.table(table).get(`${doctype_or_method}_${name_or_args}`);
     };
 
     getLastFetched().then((l) => {
@@ -478,69 +460,12 @@ export const useGetLastFetched = (db: any, doctype_or_method: string, name_or_ar
   return lastFetched;
 };
 
-// // /**Custom Hook for fetch data from Indexdb for Get Doc List */
-// export const useGetLastFetchedList = (db: any, doctype: string, args: string) => {
-//   /**  Set lastFetchedList state initially to null
-//    * - Fetch data from indexedDB
-//    * - Set lastFetchedList state to data from indexedDB
-//    * - If lastFetchedList is null - we are loading data from indexedDB
-//    * - If lastFetchedList is undefined - we do not have any data in indexedDB
-//    * */
-
-//   const [lastFetchedList, setLastFetchedList] = useState<lastFetchType | null>(null);
-
-//   useEffect(() => {
-//     const getLastFetchedList = async () => {
-//       return await db.table("docs").get(`${doctype}_${args}`);
-//     };
-
-//     getLastFetchedList().then((l) => {
-//       setLastFetchedList(l);
-//     });
-//   }, [doctype, args]);
-
-//   return lastFetchedList;
-// };
-
-// // /**Custom Hook for fetch data from Indexdb for Get Call */
-// export const useGetLastFetchedData = (db: any, method: string, params?: string) => {
-//   /**  Set lastFetchedData state initially to null
-//    * - Fetch data from indexedDB
-//    * - Set lastFetchedData state to data from indexedDB
-//    * - If lastFetchedData is null - we are loading data from indexedDB
-//    * - If lastFetchedData is undefined - we do not have any data in indexedDB
-//    * */
-
-//   const [lastFetchedData, setLastFetchedData] = useState<lastFetchType | null>(null);
-
-//   useEffect(() => {
-//     const getLastFetchedData = async () => {
-//       return await db.table("docs").get(`${method}_${params}`);
-//     };
-
-//     getLastFetchedData().then((l) => {
-//       setLastFetchedData(l);
-//     });
-//   }, [method, params]);
-
-//   return lastFetchedData;
-// };
-
 // /**Function for converting string or object date to miliseconds */
 export const convertDateToMilisecondsForGetCall = (date: string | Date) => {
   if (typeof date === 'string') {
     return convertDateToMiliseconds(date);
   } else if (typeof date === 'object') {
     return Math.floor(date.getTime());
-  }
-};
-
-// /**Function for check type of date and return date in string format */
-export const checkTypeOfDate = (date: string | Date) => {
-  if (typeof date === 'string') {
-    return date;
-  } else if (typeof date === 'object') {
-    return formatedTimestamp(date);
   }
 };
 
@@ -575,4 +500,51 @@ function encodeQueryData(data: Record<string, any>) {
   return ret.join('&');
 }
 
+export const getDatabaseName = () => {
+  const [databases, setDatabases] = useState<string[]>([]);
+
+  useEffect(() => {
+    const databaseName = async () => {
+      return await Dexie.getDatabaseNames();
+    };
+
+    databaseName().then((d) => {
+      setDatabases(d);
+      // console.log('databases', databases);
+    });
+  }, []);
+
+  return databases;
+  // return databases;
+}
+
+export const deleteDocForDoctype = (db: any, doctype: string) => {
+  db.table("docs").where("doctype").equals(doctype).delete();
+};
+
+export const deleteDocListForDoctype = (db: any, doctype: string) => {
+  db.table("docLists").where("doctype").equals(doctype).delete();
+}
+
+export const deleteDocCallForMethod = (db: any, method: string) => {
+  db.table("docCalls").where("doctype").equals(method).delete();
+}
+
+export const getDocID = (doctype: string, name?: string) => {
+  return `${doctype}_${name}`;
+}
+
+export const getDocListID = (doctype: string, args?: GetDocListArgs) => {
+  return `${doctype}_${getDocListQueryString(args)}`
+}
+
+export const getDocCallID = (method: string, params?: Record<string, any>) => {
+  return `${method}_${encodeQueryData(params ?? {})}`
+}
+
+export const deleteDataFromID = (db: any, table: 'docs' | 'docLists' | 'docCalls', id: string) => {
+  db.table(table).delete(id);
+}
+
 export default App;
+
