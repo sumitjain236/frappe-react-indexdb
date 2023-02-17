@@ -18,8 +18,8 @@ export const DexieDatabase = (databaseName: string = 'frappe-react-indexdb', ver
   const db = new Dexie(databaseName);
   db.version(version).stores({
     docs: '_id, name, doctype, modified', // Primary key and indexed props
-    docLists: '_id, name, doctype, lastFetchedOn,count', // Primary key and indexed props
-    docCalls: '_id, name, doctype, lastFetchedOn', // Primary key and indexed props
+    docLists: '_id, name, doctype, modified, count', // Primary key and indexed props
+    docCalls: '_id, name, method, modified', // Primary key and indexed props
   });
   return db;
 }

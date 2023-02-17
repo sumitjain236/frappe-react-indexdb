@@ -12,6 +12,7 @@ import { Stack, Text } from '@chakra-ui/react';
 import React from 'react';
 import { CustomError, DexieDatabase, lastFetchType, modifiedType } from './db';
 import Dexie from 'dexie';
+import { unescape } from 'querystring';
 
 function App() {
   return (
@@ -27,32 +28,42 @@ function App() {
 type Props = {}
 
 export const FetchData = (props: Props) => {
-  const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
-  // console.log(response);
+  // const response = useFrappeGetDocOffline('Indexdb', '0031ce27df');
+  // // console.log(response);
 
-  const responseList = useFrappeGetDocListOffline('Indexdb', {
-    fields: ['name', 'full_name', 'modified', 'blood_group'],
-  });
+  // const responseList = useFrappeGetDocListOffline('Indexdb', {
+  //   fields: ['name', 'full_name', 'modified', 'blood_group'],
+  // });
 
-  const responseCall = useFrappeGetCallOffline(
-    'frappe.client.get_value',
+  // const responseCallOffline = useFrappeGetCallOffline(
+  //   'frappe.client.get_list',
+  //   {
+  //     doctype: 'Indexdb',
+  //   },
+  //   '2023-01-19 17:27:35'
+  // );
+  // console.log(responseCallOffline);
+
+  // const dbName = getDatabaseName();
+
+  // const response = getDocOffline('Indexdb', '0031ce27df');
+  // const responseList = getDocListOffline('Indexdb', {
+  //   fields: ['name', 'full_name', 'modified', 'blood_group'],
+  // });
+
+  // console.log(new Date());
+
+  const responseCall = getDocCallOffline('frappe.client.get_list',
     {
       doctype: 'Indexdb',
-      filters: { name: 'aa03cf240e' },
-      fieldname: 'full_name',
-    },
-    '2023-01-19 17:27:35'
-  );
-  // console.log(responseCall);
-
-  const dbName = getDatabaseName();
+    }, '2023-02-05 17:27:35')
 
   return (
     <>
-      <Text>Doc Data: {JSON.stringify(response, null, 2)}</Text>
-      <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text>
+      {/* <Text>Doc Data: {JSON.stringify(response, null, 2)}</Text> */}
+      {/* <Text>List Data:{JSON.stringify(responseList, null, 2)}</Text> */}
       <Text>Call Data: {JSON.stringify(responseCall, null, 2)}</Text>
-      <Text>Database Name: {JSON.stringify(dbName, null, 2)}</Text>
+      {/* <Text>Database Name: {JSON.stringify(dbName, null, 2)}</Text> */}
     </>
   );
 };
@@ -380,10 +391,10 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
     if (lastFetchedData === undefined) {
       setShouldLoad(true);
     } else if (
-      lastFetchExist &&
+      lastFetchExist && lastFetchedData !== null &&
       lastModified &&
       convertDateToMilisecondsForGetCall(lastModified)! >
-      Math.floor(lastFetchedData!.lastFetchedOn!.getTime())
+      convertDateToMilisecondsForGetCall(lastFetchedData.lastFetchedOn!)!
     ) {
       setShouldLoad(true);
     }
@@ -406,7 +417,7 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
         _id: `${method}_${encodeQueryData(params ?? {})}`,
         name: `${method}_${encodeQueryData(params ?? {})}`,
         doctype: method,
-        lastFetchedOn: new Date(),
+        lastFetchedOn: convertDate(new Date()),
         data: { ...data },
       });
     } else if (error && lastFetchExist) {
@@ -444,7 +455,9 @@ export const useFrappeGetCallOffline = <T,>(method: string, params?: Record<stri
 
 /**Custom Hook for fetch data from Indexdb for Get Doc */
 export const useGetLastFetched = (db: any, table: string, doctype_or_method: string, name_or_args?: string) => {
+
   const [lastFetched, setLastFetched] = useState<lastFetchType | null>(null);
+
 
   useEffect(() => {
     const getLastFetched = async () => {
@@ -492,6 +505,14 @@ export const formatedTimestamp = (d: Date) => {
   const time = d.toTimeString().split(' ')[0];
   return `${date} ${time}`;
 };
+
+export const convertDate = (date: string | Date) => {
+  if (typeof date === 'string') {
+    return date;
+  } else if (typeof date === 'object') {
+    return formatedTimestamp(date);
+  }
+}
 
 function encodeQueryData(data: Record<string, any>) {
   const ret = [];
@@ -547,4 +568,227 @@ export const deleteDataFromID = (db: any, table: 'docs' | 'docLists' | 'docCalls
 }
 
 export default App;
+
+export interface fetchType {
+  data: any;
+  error: Error | null;
+  should_delete: boolean;
+}
+
+
+export const getDocOffline = <T,>(doctype: string, name?: string, databaseName?: string, version?: number) => {
+
+  const db = DexieDatabase(databaseName, version);
+
+  const lastFetched: lastFetchType | null = useGetLastFetched(db, 'docs', doctype, name);
+
+  const lastFetchExist: boolean = lastFetched !== undefined && lastFetched !== null;
+
+  const { data, error, mutate, isLoading, isValidating } = useFrappeGetCall<{ message: fetchType }>('frappe_offline.offline_data.get_doc_offline', {
+    doctype,
+    name,
+    last_modified: lastFetchExist ? lastFetched?.modified : undefined,
+  })
+
+  console.log('data', data);
+  console.log('error', error);
+
+  useEffect(() => {
+    if (data && data.message !== undefined && data.message !== null) {
+      if (data.message.data === null && data.message.should_delete === true) {
+        if (lastFetchExist) {
+          console.log('inside if 2');
+          db.table("docs").delete(`${doctype}_${name}`);
+        }
+      }
+      else if (data && data.message?.data !== null && data.message?.should_delete === false) {
+        console.log('inside if');
+        db.table("docs").put({
+          _id: `${doctype}_${name}`,
+          modified: data.message?.data.modified,
+          name: name,
+          doctype: doctype,
+          data: data.message.data,
+        });
+      }
+    } else if (error && lastFetchExist) {
+      console.log('inside else if');
+      db.table("docs").delete(`${doctype}_${name}`);
+    }
+  }, [data, error, lastFetchExist]);
+
+  const forceRefresh = () => {
+    mutate();
+  }
+
+  const forceDelete = () => {
+    db.table("docs").delete(`${doctype}_${name}`);
+  }
+
+  return {
+    data: data && data.message?.data ? data.message.data : lastFetchExist && !error ? lastFetched?.data : undefined,
+    error: error ? error : data && data.message.error ? data.message.error : undefined,
+    mutate: forceRefresh,
+    delete: forceDelete,
+    isLoading: isLoading,
+    isValidating: isValidating
+  };
+}
+
+export const getDocListOffline = <T,>(doctype: string, args?: GetDocListArgs, databaseName?: string, version?: number) => {
+
+  const db = DexieDatabase(databaseName, version);
+
+  const lastFetched: lastFetchType | null = useGetLastFetched(db, 'docLists', doctype, getDocListQueryString(args));
+
+  const lastFetchExist: boolean = lastFetched !== undefined && lastFetched !== null;
+
+  let params = {};
+
+  if (args) {
+    const { fields, filters, orFilters, orderBy, limit, limit_start, asDict = true } = args;
+    const orderByString = orderBy ? `${orderBy?.field} ${orderBy?.order ?? 'asc'}` : '';
+    params = {
+      fields: fields ? JSON.stringify(fields) : undefined,
+      filters: filters ? JSON.stringify(filters) : undefined,
+      or_filters: orFilters ? JSON.stringify(orFilters) : undefined,
+      order_by: orderByString,
+      limit,
+      limit_start,
+      as_dict: asDict,
+    };
+  }
+
+  const { data, error, mutate, isLoading, isValidating } = useFrappeGetCall<{ message: fetchType }>('frappe_offline.offline_data.get_list_offline', {
+    doctype,
+    args: params,
+    last_fetch_count: lastFetchExist ? lastFetched?.count : undefined,
+    last_modified: lastFetchExist ? lastFetched?.modified : undefined,
+  })
+
+  console.log('data', data);
+  console.log('error', error);
+
+  useEffect(() => {
+
+    if (data && data.message !== undefined && data.message !== null && error === undefined) {
+      if (data.message.data === null && data.message.should_delete === true) {
+        if (lastFetchExist) {
+          console.log('inside if 2');
+          db.table("docLists").delete(`${doctype}_${getDocListQueryString(args)}`);
+        }
+      }
+      else if (data && data.message?.data !== null && data.message?.should_delete === false) {
+        console.log('inside if');
+        db.table("docLists").put({
+          _id: `${doctype}_${getDocListQueryString(args)}`,
+          name: `${doctype}_${getDocListQueryString(args)}`,
+          doctype: doctype,
+          modified: formatedTimestamp(new Date()),
+          count: data?.message?.data?.length,
+          data: data?.message?.data,
+        });
+      }
+    }
+    else if (error && lastFetchExist) {
+      console.log('inside else if');
+      db.table("docLists").delete(`${doctype}_${getDocListQueryString(args)}`);
+    }
+
+  }, [data, error, lastFetchExist]);
+
+  const forceRefresh = () => {
+    mutate();
+  }
+
+  const forceDelete = () => {
+    db.table("docLists").delete(`${doctype}_${getDocListQueryString(args)}`)
+  }
+
+  return {
+    data: data && data.message?.data ? data.message.data : lastFetchExist && !error ? lastFetched?.data : undefined,
+    error: error ? error : data && data.message.error ? data.message.error : undefined,
+    mutate: forceRefresh,
+    delete: forceDelete,
+    isLoading: isLoading,
+    isValidating: isValidating
+  };
+
+}
+
+export const getDocCallOffline = <T,>(method: string, params?: Record<string, any>, lastModified?: string | Date, databaseName?: string, version?: number) => {
+
+  const db = DexieDatabase(databaseName, version);
+
+  const lastFetchedData: lastFetchType | null = useGetLastFetched(db, 'docCalls', method, encodeQueryData(params ?? {}));
+
+  const lastFetchExist: boolean = lastFetchedData !== undefined && lastFetchedData !== null;
+
+  const [shouldLoad, setShouldLoad] = useState(false);
+
+  useEffect(() => {
+    if (lastFetchedData === undefined) {
+      setShouldLoad(true);
+    } else if (
+      lastFetchExist && lastFetchedData !== null &&
+      lastModified &&
+      convertDateToMilisecondsForGetCall(lastModified)! >
+      convertDateToMilisecondsForGetCall(lastFetchedData.lastFetchedOn!)!
+    ) {
+      setShouldLoad(true);
+    }
+  }, [lastFetchExist, lastFetchedData, lastModified]);
+
+  /** 3. Fetch data from frappe if shouldLoad is true */
+  const { data, error, mutate, isLoading, isValidating } = useFrappeGetCall(
+    method,
+    params,
+    shouldLoad ? undefined : null
+  );
+
+  /** 4. Store in indexedDB if data is fetched from server
+   * - If data is fetched from server - store in indexedDB
+   * - If data is not fetched from server - delete from indexedDB*/
+
+  useEffect(() => {
+    if (data) {
+      db.table("docCalls").put({
+        _id: `${method}_${encodeQueryData(params ?? {})}`,
+        name: `${method}_${encodeQueryData(params ?? {})}`,
+        doctype: method,
+        lastFetchedOn: convertDate(new Date()),
+        data: { ...data },
+      });
+    } else if (error && lastFetchExist) {
+      db.table("docs").delete(`${method}_${params}`);
+    }
+  }, [data]);
+
+  const forceRefresh = () => {
+    if (shouldLoad) {
+      mutate();
+    } else {
+      setShouldLoad(true);
+    }
+  };
+
+  const forceDelete = () => {
+    setShouldLoad(false);
+    if (lastFetchExist) {
+      db.table("docCalls").delete(`${method}_${params}`);
+    }
+  }
+
+  // Return Data
+
+  return {
+    isLoadedFromServer: shouldLoad,
+    data: shouldLoad ? data : lastFetchedData?.data,
+    error,
+    mutate: forceRefresh,
+    delete: forceDelete,
+    isLoading: shouldLoad ? isLoading : lastFetchedData === undefined,
+    isValidating: shouldLoad ? isValidating : false,
+  };
+}
 
